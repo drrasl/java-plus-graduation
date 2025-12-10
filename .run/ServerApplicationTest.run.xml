@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="ServerApplicationTest" type="Application" factoryName="Application">
+    <option name="ALTERNATIVE_JRE_PATH" value="corretto-23" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
+    <envs>
+      <env name="SPRING-PROFILES-ACTIVE" value="test" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="ru.practicum.server.ServerApplication" />
+    <module name="server" />
+    <option name="PROGRAM_PARAMETERS" value="--spring.profiles.active=test" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/stats/server" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

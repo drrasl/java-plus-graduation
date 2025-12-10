@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="MainApplicationTest" type="Application" factoryName="Application">
+    <option name="ALTERNATIVE_JRE_PATH" value="corretto-23" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
+    <envs>
+      <env name="SPRING_PROFILES_ACTIVE" value="test" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="ru.practicum.main.MainApplication" />
+    <module name="main-service" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/core/main-service" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
