@@ -1,0 +1,76 @@
+server:
+  port: 8080
+spring:
+  cloud:
+    gateway:
+      discovery.locator.enabled: true
+      routes:
+        # Категории
+        - id: categories_all
+          uri: lb://main-service
+          predicates:
+            - Path=/categories/**, /admin/categories/**
+          filters:
+            - CircuitBreaker=mainCircuit
+
+        # Комментарии
+        - id: comments_all
+          uri: lb://main-service
+          predicates:
+            - Path=/events/*/comments, /users/*/comments/**, /admin/comments/**
+          filters:
+            - CircuitBreaker=mainCircuit
+
+        # Компиляции
+        - id: compilations_all
+          uri: lb://main-service
+          predicates:
+            - Path=/compilations/**, /admin/compilations/**
+          filters:
+            - CircuitBreaker=mainCircuit
+
+        # Ивенты
+        - id: events_all
+          uri: lb://main-service
+          predicates:
+            - Path=/events/**, /users/*/events/**, /admin/events/**
+          filters:
+            - CircuitBreaker=mainCircuit
+
+        # Запросы
+        - id: requests_all
+          uri: lb://main-service
+          predicates:
+            - Path=/users/*/requests/**
+          filters:
+            - CircuitBreaker=mainCircuit
+
+        # Пользователи
+        - id: users_all
+          uri: lb://main-service
+          predicates:
+            - Path=/admin/users/**
+          filters:
+            - CircuitBreaker=mainCircuit
+
+resilience4j.circuitbreaker:
+  configs:
+    default:
+      slidingWindowSize: 10
+      failureRateThreshold: 50
+      waitDurationInOpenState: 10s
+      permittedNumberOfCallsInHalfOpenState: 3
+      minimumNumberOfCalls: 5
+      automaticTransitionFromOpenToHalfOpenEnabled: true
+      slidingWindowType: COUNT_BASED
+
+  instances:
+    mainCircuit:
+      baseConfig: default
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: INFO
+    reactor.netty.http.client: WARN
+    ru.practicum.gateway: DEBUG

@@ -6,9 +6,9 @@
       <env name="SPRING-PROFILES-ACTIVE" value="test" />
     </envs>
     <option name="MAIN_CLASS_NAME" value="ru.practicum.server.ServerApplication" />
-    <module name="server" />
+    <module name="stats-server" />
     <option name="PROGRAM_PARAMETERS" value="--spring.profiles.active=test" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/stats/server" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/stats/stats-server" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>
