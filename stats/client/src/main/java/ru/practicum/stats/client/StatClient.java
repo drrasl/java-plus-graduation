@@ -1,5 +1,8 @@
 package ru.practicum.stats.client;
 
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
+import ru.practicum.stats.client.exception.StatsServerUnavailable;
 import ru.practicum.stats.dto.dto.EndpointHitDto;
 import ru.practicum.stats.dto.dto.ViewStatsDto;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,24 +23,33 @@ import java.util.List;
 @Service
 public class StatClient {
     private final RestTemplate restTemplate;
+    private final DiscoveryClient discoveryClient;
+    private final String statsServiceId;
+
     private static final String API_PREFIX = "/";
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    public StatClient(@Value("${stat-server.url}") String serverUrl, RestTemplateBuilder builder) {
+    public StatClient(String statsServiceId,
+                      DiscoveryClient discoveryClient,
+                      RestTemplateBuilder builder) {
+        this.statsServiceId = statsServiceId;
+        this.discoveryClient = discoveryClient;
         this.restTemplate = builder
-                .uriTemplateHandler(new DefaultUriBuilderFactory(serverUrl + API_PREFIX))
                 .requestFactory(() -> new HttpComponentsClientHttpRequestFactory())
                 .build();
     }
 
     public ResponseEntity<Void> hit(EndpointHitDto hitDto) {
-        return restTemplate.postForEntity("hit", hitDto, Void.class);
+        String serverUrl = getStatsServerUrl();
+        return restTemplate.postForEntity(serverUrl + API_PREFIX + "hit", hitDto, Void.class);
     }
 
     public ResponseEntity<List<ViewStatsDto>> getStats(LocalDateTime start, LocalDateTime end, List<String> uris, Boolean unique) {
-        UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromPath("stats")
-                .queryParam("start", start.format(DATE_TIME_FORMATTER)) //Было так: encodeValue(start.format(DATE_TIME_FORMATTER)))
-                .queryParam("end", end.format(DATE_TIME_FORMATTER));    //Было так: encodeValue(start.format(DATE_TIME_FORMATTER)))
+        String serverUrl = getStatsServerUrl();
+        UriComponentsBuilder uriBuilder = UriComponentsBuilder
+                .fromUriString(serverUrl + API_PREFIX + "stats")
+                .queryParam("start", start.format(DATE_TIME_FORMATTER))
+                .queryParam("end", end.format(DATE_TIME_FORMATTER));
 
         if (uris != null && !uris.isEmpty()) {
             uriBuilder.queryParam("uris", uris.toArray());
@@ -54,5 +66,25 @@ public class StatClient {
                 new ParameterizedTypeReference<List<ViewStatsDto>>() {
                 }
         );
+    }
+
+    private String getStatsServerUrl() {
+        try {
+            List<ServiceInstance> instances = discoveryClient.getInstances(statsServiceId);
+            if (instances == null || instances.isEmpty()) {
+                throw new StatsServerUnavailable(
+                        "Сервис статистики с ID '" + statsServiceId + "' не найден в Eureka"
+                );
+            }
+
+            ServiceInstance instance = instances.getFirst();
+            return instance.getUri().toString();
+
+        } catch (Exception exception) {
+            throw new StatsServerUnavailable(
+                    "Ошибка обнаружения адреса сервиса статистики с id: " + statsServiceId,
+                    exception
+            );
+        }
     }
 }
