@@ -1,22 +1,19 @@
-package ru.practicum.main.service;
+package ru.practicum.user.service.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.practicum.main.dto.mappers.UserMapper;
-import ru.practicum.main.dto.request.user.NewUserRequest;
-import ru.practicum.main.dto.response.user.UserDto;
-import ru.practicum.main.exception.NotFoundException;
-import ru.practicum.main.model.User;
-import ru.practicum.main.repository.UserRepository;
-import ru.practicum.main.service.interfaces.UserService;
+import ru.practicum.user.service.dto.mappers.UserMapper;
+import ru.practicum.user.service.dto.request.user.NewUserRequest;
+import ru.practicum.user.service.dto.response.user.UserDto;
+import ru.practicum.user.service.exception.NotFoundException;
+import ru.practicum.user.service.model.User;
+import ru.practicum.user.service.repository.UserRepository;
+import ru.practicum.user.service.service.interfaces.UserService;
 
 import java.util.List;
-
-import static ru.practicum.main.dto.mappers.UserMapper.toEntity;
-import static ru.practicum.main.dto.mappers.UserMapper.toDto;
 
 @Service
 @Slf4j
@@ -45,10 +42,10 @@ public class UserServiceImp implements UserService {
     @Transactional
     public UserDto addUser(NewUserRequest newUserRequest) {
         log.info("Добавление нового пользователя " + newUserRequest);
-        User user = toEntity(newUserRequest);
+        User user = UserMapper.toEntity(newUserRequest);
         User savedUser = repository.save(user);
         log.info("Пользователь добавлен: {}", savedUser);
-        return toDto(savedUser);
+        return UserMapper.toDto(savedUser);
     }
 
     //Удаление пользователя
@@ -61,5 +58,15 @@ public class UserServiceImp implements UserService {
         }
         repository.deleteById(userId);
         log.info("Пользователь с ID: {} удален", userId);
+    }
+
+    //Возвращение пользователя
+    @Override
+    public UserDto getUser(Long userId) {
+        log.info("Возвращаем пользователя по ID: {}", userId);
+        User user = repository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Пользователь c userId " + userId + " не найден"));
+        log.info("Пользователь с ID: {} найден и отправлен", userId);
+        return UserMapper.toDto(user);
     }
 }

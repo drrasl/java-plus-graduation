@@ -4,12 +4,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import ru.practicum.main.client.user.UserClient;
 import ru.practicum.main.dto.mappers.CommentMapper;
 import ru.practicum.main.dto.response.comment.CommentDto;
+import ru.practicum.main.dto.response.user.UserDto;
+import ru.practicum.main.exception.NotFoundException;
+import ru.practicum.main.model.Comment;
 import ru.practicum.main.repository.CommentRepository;
 import ru.practicum.main.service.interfaces.CommentPublicService;
 
-import java.util.List;
+import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -18,13 +23,50 @@ import java.util.stream.Collectors;
 public class CommentPublicServiceImpl implements CommentPublicService {
 
     private final CommentRepository commentRepository;
+    private final UserClient userClient;
 
     @Override
     public List<CommentDto> getCommentsByEventId(Long eventId, Pageable pageable) {
         log.info("Получение комментариев для события с ID: {}", eventId);
-        return commentRepository.findByEventIdOrderByCreatedOnDesc(eventId, pageable)
-                .stream()
-                .map(CommentMapper::toDto)
+
+        // Получаем комментарии
+        List<Comment> comments = commentRepository.findByEventIdOrderByCreatedOnDesc(eventId, pageable);
+
+        // Получаем уникальные ID пользователей из комментариев
+        Set<Long> userIds = comments.stream()
+                .map(Comment::getUserId)
+                .collect(Collectors.toSet());
+
+        // Получаем пользователей через клиент
+        Map<Long, UserDto> usersMap = getUsersByIds(userIds);
+
+        return comments.stream()
+                .map(comment -> {
+                    UserDto userDto = usersMap.get(comment.getUserId());
+                    if (userDto == null) {
+                        log.warn("Пользователь с ID {} не найден для комментария {}",
+                                comment.getUserId(), comment.getId());
+                        throw new NotFoundException("Пользователь c userId " + comment.getUserId() + " не найден");
+                    }
+                    return CommentMapper.toDto(comment, userDto);
+                })
                 .collect(Collectors.toList());
+    }
+
+    private Map<Long, UserDto> getUsersByIds(Set<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        try {
+            // Используем существующий метод getUsers, который принимает List<Long> ids
+            List<UserDto> users = userClient.getUsers(new ArrayList<>(userIds));
+            return users.stream()
+                    .collect(Collectors.toMap(UserDto::getId, Function.identity()));
+        } catch (Exception e) {
+            log.error("Failed to get users from user-service: {}", e.getMessage());
+            // Возвращаем пустую мапу, чтобы не падать полностью
+            return new HashMap<>();
+        }
     }
 }

@@ -4,6 +4,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import ru.practicum.main.dto.request.comment.NewCommentDto;
 import ru.practicum.main.dto.response.comment.CommentDto;
+import ru.practicum.main.dto.response.user.UserDto;
 import ru.practicum.main.model.Comment;
 
 import static ru.practicum.main.dto.mappers.UserMapper.toUserShortDto;
@@ -18,10 +19,10 @@ public class CommentMapper {
                 .build();
     }
 
-    public static CommentDto toDto(Comment comment) {
+    public static CommentDto toDto(Comment comment, UserDto userDto) {
         return CommentDto.builder()
                 .id(comment.getId())
-                .user(toUserShortDto(comment.getUser()))
+                .user(toUserShortDto(userDto))
                 .text(comment.getText())
                 .createdOn(comment.getCreatedOn())
                 .updatedOn(comment.getUpdatedOn())

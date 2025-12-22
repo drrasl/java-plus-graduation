@@ -47,7 +47,7 @@ spring:
 
         # Пользователи
         - id: users_all
-          uri: lb://main-service
+          uri: lb://user-service
           predicates:
             - Path=/admin/users/**
           filters:

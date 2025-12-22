@@ -6,16 +6,22 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.practicum.main.client.user.UserClient;
 import ru.practicum.main.dto.mappers.CommentMapper;
 import ru.practicum.main.dto.request.comment.SearchOfCommentByAdminDto;
 import ru.practicum.main.dto.response.comment.CommentDto;
+import ru.practicum.main.dto.response.user.UserDto;
 import ru.practicum.main.exception.NotFoundException;
+import ru.practicum.main.model.Comment;
 import ru.practicum.main.model.QComment;
 import ru.practicum.main.repository.CommentRepository;
 import ru.practicum.main.service.interfaces.CommentAdminService;
 
+import java.util.HashMap;
 import java.util.List;
 
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,6 +31,7 @@ import java.util.stream.Collectors;
 public class CommentAdminServiceImpl implements CommentAdminService {
 
     private final CommentRepository commentRepository;
+    private final UserClient userClient;
 
     @Override
     @Transactional
@@ -45,7 +52,7 @@ public class CommentAdminServiceImpl implements CommentAdminService {
         BooleanBuilder predicate = new BooleanBuilder();
 
         if (searchDto.getUsers() != null && !searchDto.getUsers().isEmpty()) {
-            predicate.and(comment.user.id.in(searchDto.getUsers()));
+            predicate.and(comment.userId.in(searchDto.getUsers()));
         }
         if (searchDto.getEvents() != null && !searchDto.getEvents().isEmpty()) {
             predicate.and(comment.event.id.in(searchDto.getEvents()));
@@ -57,8 +64,51 @@ public class CommentAdminServiceImpl implements CommentAdminService {
             predicate.and(comment.createdOn.loe(searchDto.getRangeEnd()));
         }
 
-        return commentRepository.findAll(predicate, pageable).stream()
-                .map(CommentMapper::toDto)
+        // Получаем все комментарии
+        List<Comment> comments = commentRepository.findAll(predicate, pageable).getContent();
+
+        // Получаем пользователей из списка в searchDto (или всех, если список пустой)
+        List<Long> userIdsToFetch;
+        if (searchDto.getUsers() != null && !searchDto.getUsers().isEmpty()) {
+            userIdsToFetch = searchDto.getUsers();
+        } else {
+            // Если фильтр по пользователям не задан, получаем всех пользователей из комментариев
+            userIdsToFetch = comments.stream()
+                    .map(Comment::getUserId)
+                    .distinct()
+                    .collect(Collectors.toList());
+        }
+
+        // Получаем пользователей через клиент
+        Map<Long, UserDto> usersMap = getUsersByIds(userIdsToFetch);
+
+        return comments.stream()
+                .map(commentEntity -> {
+                    UserDto userDto = usersMap.get(commentEntity.getUserId());
+                    if (userDto == null) {
+                        log.warn("Пользователь с ID {} не найден для комментария {}",
+                                commentEntity.getUserId(), commentEntity.getId());
+                        throw new NotFoundException("Пользователь c userId " + commentEntity.getUserId() + " не найден");
+                    }
+                    return CommentMapper.toDto(commentEntity, userDto);
+                })
                 .collect(Collectors.toList());
+    }
+
+    private Map<Long, UserDto> getUsersByIds(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        try {
+            // Используем существующий метод getUsers, который принимает List<Long> ids
+            List<UserDto> users = userClient.getUsers(userIds);
+            return users.stream()
+                    .collect(Collectors.toMap(UserDto::getId, Function.identity()));
+        } catch (Exception e) {
+            log.error("Failed to get users from user-service: {}", e.getMessage());
+            // Возвращаем пустую мапу, чтобы не падать полностью
+            return new HashMap<>();
+        }
     }
 }

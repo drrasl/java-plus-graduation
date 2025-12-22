@@ -4,11 +4,16 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import ru.practicum.main.dto.request.compilation.NewCompilationDto;
 import ru.practicum.main.dto.response.compilation.CompilationDto;
+import ru.practicum.main.dto.response.event.EventShortDto;
+import ru.practicum.main.dto.response.user.UserDto;
+import ru.practicum.main.exception.NotFoundException;
 import ru.practicum.main.model.Compilation;
 import ru.practicum.main.model.Event;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static ru.practicum.main.dto.mappers.EventMapper.toEventShortDto;
 
@@ -24,17 +29,29 @@ public class CompilationMapper {
                 .build();
     }
 
-    public static CompilationDto toDto(Compilation compilation) {
+    public static CompilationDto toDto(Compilation compilation, Map<Long, UserDto> usersMap) {
+        Set<EventShortDto> eventDtos = compilation.getEvents().stream()
+                .map(event -> {
+                    UserDto userDto = usersMap.get(event.getInitiatorId());
+                    if (userDto == null) {
+                        throw new NotFoundException("Пользователь не найден");
+                    }
+                    return EventMapper.toEventShortDto(event, userDto);
+                })
+                .collect(Collectors.toSet());
+
         return CompilationDto
                 .builder()
-                .events(toEventShortDto(compilation.getEvents()))
+                .events(eventDtos)
                 .id(compilation.getId())
                 .pinned(compilation.getPinned())
                 .title(compilation.getTitle())
                 .build();
     }
 
-    public static List<CompilationDto> toDto(List<Compilation> compilations) {
-        return compilations.stream().map(CompilationMapper::toDto).toList();
+    public static List<CompilationDto> toDto(List<Compilation> compilations, Map<Long, UserDto> usersMap) {
+        return compilations.stream()
+                .map(compilation -> toDto(compilation, usersMap))
+                .collect(Collectors.toList());
     }
 }

@@ -1,0 +1,18 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="UserServiceTest" type="Application" factoryName="Application">
+    <envs>
+      <env name="SPRING_PROFILES_ACTIVE" value="test" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="ru.practicum.user.service.UserService" />
+    <module name="user-service" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="ru.practicum.user.service.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

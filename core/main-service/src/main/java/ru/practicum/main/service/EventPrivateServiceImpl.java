@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.practicum.main.client.user.UserClient;
 import ru.practicum.main.dto.mappers.EventMapper;
 import ru.practicum.main.dto.mappers.LocationMapper;
 import ru.practicum.main.dto.mappers.RequestMapper;
@@ -13,6 +14,7 @@ import ru.practicum.main.dto.response.event.EventFullDto;
 import ru.practicum.main.dto.response.event.EventRequestStatusUpdateResult;
 import ru.practicum.main.dto.response.event.EventShortDto;
 import ru.practicum.main.dto.response.request.ParticipationRequestDto;
+import ru.practicum.main.dto.response.user.UserDto;
 import ru.practicum.main.exception.ConflictException;
 import ru.practicum.main.exception.NotFoundException;
 import ru.practicum.main.exception.ValidationException;
@@ -34,26 +36,26 @@ import java.util.stream.Collectors;
 public class EventPrivateServiceImpl extends AbstractEventService implements EventPrivateService {
 
     private final EventRepository eventRepository;
-    private final UserRepository userRepository;
+    private final UserClient userClient;
     private final CategoryRepository categoryRepository;
     private final LocationRepository locationRepository;
 
     public EventPrivateServiceImpl(RequestRepository requestRepository,
                                    StatClient statClient,
                                    EventRepository eventRepository,
-                                   UserRepository userRepository,
+                                   UserClient userClient,
                                    CategoryRepository categoryRepository,
                                    LocationRepository locationRepository) {
         super(requestRepository, statClient);
         this.eventRepository = eventRepository;
-        this.userRepository = userRepository;
+        this.userClient = userClient;
         this.categoryRepository = categoryRepository;
         this.locationRepository = locationRepository;
     }
 
     @Override
     public List<EventShortDto> getEvents(Long userId, Pageable pageable) {
-        validateUserExisted(userId);
+        UserDto userDto = validateAndGetUser(userId);
         log.debug("Получаем события пользователя {} с пагинацией: {}", userId, pageable);
         Page<Event> eventsPage = eventRepository.findByInitiatorIdOrderByCreatedOnDesc(userId, pageable);
         if (eventsPage.isEmpty()) {
@@ -64,7 +66,7 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         Map<Long, Long> views = getEventsViews(events);
         return events.stream()
                 .map(event -> {
-                    EventShortDto dto = EventMapper.toEventShortDto(event);
+                    EventShortDto dto = EventMapper.toEventShortDto(event, userDto);
                     dto.setViews(views.getOrDefault(event.getId(), 0L));
                     return dto;
                 })
@@ -74,32 +76,30 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
     @Override
     @Transactional
     public EventFullDto addEvent(Long userId, NewEventDto newEventDto) {
-        log.debug("Создание события пользователем {}: {}", userId, newEventDto);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("Пользователь c userId " + userId + " не найден"));
+        UserDto userDto = validateAndGetUser(userId);
         Category category = categoryRepository.findById(newEventDto.getCategory())
                 .orElseThrow(() -> new NotFoundException(
                         "Категория c id " + newEventDto.getCategory() + " не найдена"));
         validateEventDate(newEventDto.getEventDate());
         LocationEntity locationEntity = LocationMapper.toLocation(newEventDto.getLocation());
         LocationEntity savedLocationEntity = locationRepository.save(locationEntity);
-        Event event = EventMapper.toEventFromNewEventDto(newEventDto, user, category, savedLocationEntity);
+        Event event = EventMapper.toEventFromNewEventDto(newEventDto, userId, category, savedLocationEntity);
         event.setConfirmedRequests(0);
         Event savedEvent = eventRepository.save(event);
         log.info("Событие создано успешно: ID {}", savedEvent.getId());
-        EventFullDto result = EventMapper.toEventFullDto(savedEvent);
+        EventFullDto result = EventMapper.toEventFullDto(savedEvent, userDto);
         result.setViews(0L);
         return result;
     }
 
     @Override
     public EventFullDto getEvent(Long eventId, Long userId) {
-        validateUserExisted(userId);
+        UserDto userDto = validateAndGetUser(userId);
         Event event = validateEventOfInitiator(eventId, userId);
         Integer confirmedRequests = requestRepository.countConfirmedRequestsByEventId(eventId);
         event.setConfirmedRequests(confirmedRequests);
         Long views = getEventViews(eventId);
-        EventFullDto result = EventMapper.toEventFullDto(event);
+        EventFullDto result = EventMapper.toEventFullDto(event, userDto);
         result.setViews(views);
         log.debug("Событие {} пользователя {} найдено", eventId, userId);
         return result;
@@ -111,7 +111,9 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         Long userId = userIdAndEventIdDto.getUserId();
         Long eventId = userIdAndEventIdDto.getEventId();
         log.debug("Обновление события {} пользователя {}: {}", eventId, userId, updateEventUserRequest);
-        validateUserExisted(userId);
+
+        UserDto userDto = validateAndGetUser(userId);
+
         Event event = validateEventOfInitiator(eventId, userId);
         validateEventCanBeUpdated(event);
         updateEventFields(event, updateEventUserRequest);
@@ -126,7 +128,7 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         event.setConfirmedRequests(confirmedRequests);
         Event updatedEvent = eventRepository.save(event);
         Long views = getEventViews(eventId);
-        EventFullDto result = EventMapper.toEventFullDto(updatedEvent);
+        EventFullDto result = EventMapper.toEventFullDto(updatedEvent, userDto);
         result.setViews(views);
         log.info("Событие {} пользователя {} успешно обновлено", eventId, userId);
         return result;
@@ -180,7 +182,7 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
     @Override
     public List<ParticipationRequestDto> getRequests(Long userId, Long eventId) {
         log.debug("Получение запросов на участие в событии {} пользователя {}", eventId, userId);
-        validateUserExisted(userId);
+        UserDto userDto = validateAndGetUser(userId);
         Event event = validateEventOfInitiator(eventId, userId);
         List<Request> requests = requestRepository.findAllByEventId(eventId);
         if (requests.isEmpty()) {
@@ -199,7 +201,7 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         Long eventId = userIdAndEventIdDto.getEventId();
         log.debug("Обработка изменения статуса заявок для события {} пользователя {}: {}",
                 eventId, userId, updateRequest);
-        validateUserExisted(userId);
+        UserDto userDto = validateAndGetUser(userId);
         Event event = validateEventOfInitiator(eventId, userId);
         if (!isModerationRequired(event)) {
             throw new ConflictException("Подтверждение заявок не требуется для этого события");
@@ -224,9 +226,14 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         }
     }
 
-    private void validateUserExisted(Long userId) {
-        log.debug("Проверяем, что пользователь с userId {} существует", userId);
-        if (!userRepository.existsById(userId)) {
+    private UserDto validateAndGetUser(Long userId) {
+        //Проверим пользователя через клиент
+        try {
+            UserDto user = userClient.getUserById(userId);
+            log.debug("Existing User received from user-service: {}", user);
+            return user;
+        } catch (Exception e) {
+            log.debug("Failed to get user from user-service: {}", e.getMessage());
             throw new NotFoundException("Пользователь c userId " + userId + " не найден");
         }
     }

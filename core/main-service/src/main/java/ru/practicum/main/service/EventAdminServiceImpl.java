@@ -7,12 +7,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.practicum.main.client.user.UserClient;
 import ru.practicum.main.dto.mappers.EventMapper;
 import ru.practicum.main.dto.mappers.LocationMapper;
 import ru.practicum.main.dto.request.event.SearchOfEventByAdminDto;
 import ru.practicum.main.dto.request.event.StateAction;
 import ru.practicum.main.dto.request.event.UpdateEventAdminRequest;
 import ru.practicum.main.dto.response.event.EventFullDto;
+import ru.practicum.main.dto.response.user.UserDto;
 import ru.practicum.main.exception.ConflictException;
 import ru.practicum.main.exception.NotFoundException;
 import ru.practicum.main.exception.ValidationException;
@@ -28,9 +30,8 @@ import ru.practicum.stats.client.StatClient;
 import ru.practicum.main.model.QEvent;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -41,16 +42,19 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
     private final EventRepository eventRepository;
     private final CategoryRepository categoryRepository;
     private final LocationRepository locationRepository;
+    private final UserClient userClient;
 
     public EventAdminServiceImpl(RequestRepository requestRepository,
                                  StatClient statClient,
                                  EventRepository eventRepository,
                                  CategoryRepository categoryRepository,
-                                 LocationRepository locationRepository) {
+                                 LocationRepository locationRepository,
+                                 UserClient userClient) {
         super(requestRepository, statClient);
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
         this.locationRepository = locationRepository;
+        this.userClient = userClient;
     }
 
     @Override
@@ -63,11 +67,20 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
             return Collections.emptyList();
         }
         List<Event> events = eventsPage.getContent();
+        Map<Long, UserDto> initiatorsMap = getInitiatorsMap(events);
         Map<Long, Long> views = getEventsViews(events);
         Map<Long, Integer> confirmedRequests = getConfirmedRequests(events);
         return events.stream()
                 .map(event -> {
-                    EventFullDto dto = EventMapper.toEventFullDto(event);
+
+                    UserDto userDto = initiatorsMap.get(event.getInitiatorId());
+                    if (userDto == null) {
+                        log.warn("Пользователь с ID {} не найден для события {}",
+                                event.getInitiatorId(), event.getId());
+                        throw new NotFoundException("Пользователь c userId " + event.getInitiatorId() + " не найден");
+                    }
+
+                    EventFullDto dto = EventMapper.toEventFullDto(event, userDto);
                     dto.setViews(views.getOrDefault(event.getId(), 0L));
                     dto.setConfirmedRequests(confirmedRequests.getOrDefault(event.getId(), 0));
                     return dto;
@@ -92,11 +105,13 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
         }
         Event updatedEvent = eventRepository.save(event);
 
+        UserDto userDto = getUserById(event.getInitiatorId());
+
         Long views = getEventViews(eventId);
         Integer confirmedRequests = requestRepository.countConfirmedRequestsByEventId(eventId);
         updatedEvent.setConfirmedRequests(confirmedRequests);
 
-        EventFullDto result = EventMapper.toEventFullDto(updatedEvent);
+        EventFullDto result = EventMapper.toEventFullDto(updatedEvent, userDto);
         result.setViews(views);
         result.setConfirmedRequests(confirmedRequests);
 
@@ -110,7 +125,7 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
 
         // Пользователи
         if (searchDto.getUsers() != null && !searchDto.getUsers().isEmpty()) {
-            predicate.and(event.initiator.id.in(searchDto.getUsers()));
+            predicate.and(event.initiatorId.in(searchDto.getUsers()));
         }
 
         // Статусы
@@ -208,6 +223,39 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
         if (event.getState() == Event.EventState.PUBLISHED &&
                 newEventDate.isBefore(LocalDateTime.now().plusHours(1))) {
             throw new ConflictException("Дата начала изменяемого события должна быть не ранее чем за час от даты публикации");
+        }
+    }
+
+    private Map<Long, UserDto> getInitiatorsMap(List<Event> events) {
+        Set<Long> initiatorIds = events.stream()
+                .map(Event::getInitiatorId)
+                .collect(Collectors.toSet());
+
+        return getUsersByIds(new ArrayList<>(initiatorIds));
+    }
+
+    private Map<Long, UserDto> getUsersByIds(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        try {
+            List<UserDto> users = userClient.getUsers(userIds);
+            return users.stream()
+                    .collect(Collectors.toMap(UserDto::getId, Function.identity()));
+        } catch (Exception e) {
+            log.error("Failed to get users from user-service: {}", e.getMessage());
+            // Возвращаем пустую мапу, чтобы не падать полностью
+            return new HashMap<>();
+        }
+    }
+
+    private UserDto getUserById(Long userId) {
+        try {
+            return userClient.getUserById(userId);
+        } catch (Exception e) {
+            log.warn("Не удалось получить пользователя с ID {}: {}", userId, e.getMessage());
+            throw new NotFoundException("Пользователь c userId " + userId + " не найден");
         }
     }
 }

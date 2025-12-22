@@ -1,4 +1,4 @@
-package ru.practicum.main.controller;
+package ru.practicum.user.service.controller;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -10,9 +10,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import ru.practicum.main.dto.request.user.NewUserRequest;
-import ru.practicum.main.dto.response.user.UserDto;
-import ru.practicum.main.service.interfaces.UserService;
+import ru.practicum.user.service.dto.request.user.NewUserRequest;
+import ru.practicum.user.service.dto.response.user.UserDto;
+import ru.practicum.user.service.service.interfaces.UserService;
 
 import java.util.List;
 
@@ -44,6 +44,12 @@ public class UserController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteUser(@PathVariable Long userId) {
         service.deleteUser(userId);
+    }
+
+    //Возвращение пользователя по его id
+    @GetMapping("/admin/users/{id}")
+    public UserDto getUser(@PathVariable("id") Long userId) {
+        return service.getUser(userId);
     }
 
 }

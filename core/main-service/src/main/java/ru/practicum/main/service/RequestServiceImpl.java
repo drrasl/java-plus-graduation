@@ -3,16 +3,16 @@ package ru.practicum.main.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import ru.practicum.main.client.user.UserClient;
 import ru.practicum.main.dto.response.request.ParticipationRequestDto;
+import ru.practicum.main.dto.response.user.UserDto;
 import ru.practicum.main.exception.ConflictException;
 import ru.practicum.main.exception.NotFoundException;
 import ru.practicum.main.exception.OwnershipMismatchException;
 import ru.practicum.main.model.Event;
 import ru.practicum.main.model.Request;
-import ru.practicum.main.model.User;
 import ru.practicum.main.repository.EventRepository;
 import ru.practicum.main.repository.RequestRepository;
-import ru.practicum.main.repository.UserRepository;
 import ru.practicum.main.service.interfaces.RequestService;
 
 import java.time.LocalDateTime;
@@ -25,7 +25,7 @@ import static ru.practicum.main.dto.mappers.RequestMapper.toParticipationRequest
 @Slf4j
 @RequiredArgsConstructor
 public class RequestServiceImpl implements RequestService {
-    private final UserRepository userRepository;
+    private final UserClient userClient;
     private final EventRepository eventRepository;
     private final RequestRepository requestRepository;
 
@@ -38,7 +38,7 @@ public class RequestServiceImpl implements RequestService {
     public ParticipationRequestDto cancel(Long userId, Long requestId) {
         getUserById(userId);
         Request request = getRequestById(requestId);
-        if (!request.getRequester().getId().equals(userId)) {
+        if (!request.getRequesterId().equals(userId)) {
             throw new OwnershipMismatchException("пользователь " + userId + " не отправлял запрос " + request.getId());
         }
         request.setStatus(Request.RequestStatus.CANCELED);
@@ -51,28 +51,24 @@ public class RequestServiceImpl implements RequestService {
             throw new IllegalArgumentException("параметр eventId обязателен");
         }
         Event event = getEventById(eventId);
-        User user = getUserById(userId);
+        UserDto user = getUserById(userId);
         if (requestRepository.existsByRequesterIdAndEventId(userId, eventId)) {
             throw new ConflictException("запрос на участие в событии " + eventId + " уже создан");
         }
-        if (event.getInitiator().getId().equals(userId)) {
+        if (event.getInitiatorId().equals(userId)) {
             throw new ConflictException(userId + " является инициатором события");
         }
         if (event.getState() != Event.EventState.PUBLISHED) {
             throw new ConflictException("нельзя участвовать в неопубликованном событии");
         }
-//        if (requestRepository.countByEvent_Id(eventId) >= event.getParticipantLimit() && event.getParticipantLimit() != 0) {
-//            throw new ConflictException("достигнут лимит запросов на участие");
-//        }
         if (!event.getRequestModeration()) {
             int confirmedRequests = requestRepository.countConfirmedRequestsByEventId(eventId);
             if (confirmedRequests >= event.getParticipantLimit() && event.getParticipantLimit() != 0) {
                 throw new ConflictException("Достигнут лимит подтверждённых участников");
             }
         }
-        Request request = Request
-                .builder()
-                .requester(user)
+        Request request = Request.builder()
+                .requesterId(user.getId())
                 .event(event)
                 .created(LocalDateTime.now())
                 .status(event.getRequestModeration() ? Request.RequestStatus.PENDING : Request.RequestStatus.CONFIRMED)
@@ -83,9 +79,16 @@ public class RequestServiceImpl implements RequestService {
         return toParticipationRequestDto(requestRepository.save(request));
     }
 
-    private User getUserById(Long userId) {
-        return userRepository.findById(userId).orElseThrow(() ->
-                new NotFoundException("пользователь с id " + userId + " не найден"));
+    private UserDto getUserById(Long userId) {
+        //Получаем пользователя через клиент
+        try {
+            UserDto user = userClient.getUserById(userId);
+            log.debug("Existing User received from user-service: {}", user);
+            return user;
+        } catch (Exception e) {
+            log.debug("Failed to get user from user-service: {}", e.getMessage());
+            throw new NotFoundException("Пользователь c userId " + userId + " не найден");
+        }
     }
 
     private Event getEventById(Long eventId) {

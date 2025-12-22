@@ -1,8 +1,8 @@
-package ru.practicum.main.service.interfaces;
+package ru.practicum.user.service.service.interfaces;
 
 import org.springframework.data.domain.Pageable;
-import ru.practicum.main.dto.request.user.NewUserRequest;
-import ru.practicum.main.dto.response.user.UserDto;
+import ru.practicum.user.service.dto.request.user.NewUserRequest;
+import ru.practicum.user.service.dto.response.user.UserDto;
 
 
 import java.util.List;
@@ -13,4 +13,6 @@ public interface UserService {
     UserDto addUser(NewUserRequest newUserRequest);
 
     void deleteUser(Long id);
+
+    UserDto getUser(Long id);
 }
