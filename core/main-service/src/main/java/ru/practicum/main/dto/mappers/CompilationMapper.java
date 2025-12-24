@@ -15,8 +15,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static ru.practicum.main.dto.mappers.EventMapper.toEventShortDto;
-
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class CompilationMapper {
 

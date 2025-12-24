@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import ru.practicum.main.client.request.RequestClient;
 import ru.practicum.main.client.user.UserClient;
 import ru.practicum.main.dto.mappers.EventMapper;
 import ru.practicum.main.dto.request.event.SearchOfEventByPublicDto;
@@ -20,14 +21,12 @@ import ru.practicum.main.exception.ValidationException;
 import ru.practicum.main.model.Event;
 import ru.practicum.main.model.QEvent;
 import ru.practicum.main.repository.EventRepository;
-import ru.practicum.main.repository.RequestRepository;
 import ru.practicum.main.service.interfaces.EventPublicService;
 import ru.practicum.stats.client.StatClient;
 import ru.practicum.stats.dto.dto.EndpointHitDto;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -36,15 +35,13 @@ import java.util.stream.Collectors;
 public class EventPublicServiceImpl extends AbstractEventService implements EventPublicService {
 
     private final EventRepository eventRepository;
-    private final UserClient userClient;
 
-    public EventPublicServiceImpl(RequestRepository requestRepository,
+    public EventPublicServiceImpl(RequestClient requestClient,
                                   StatClient statClient,
                                   EventRepository eventRepository,
                                   UserClient userClient) {
-        super(requestRepository, statClient);
+        super(requestClient, statClient, userClient);
         this.eventRepository = eventRepository;
-        this.userClient = userClient;
     }
 
     @Override
@@ -99,7 +96,7 @@ public class EventPublicServiceImpl extends AbstractEventService implements Even
         UserDto userDto = getUserById(event.getInitiatorId());
 
         Long views = getEventViews(id);
-        Integer confirmedRequests = requestRepository.countConfirmedRequestsByEventId(id);
+        Integer confirmedRequests = getConfirmedRequestsCount(id);
         event.setConfirmedRequests(confirmedRequests);
         EventFullDto result = EventMapper.toEventFullDto(event, userDto);
         result.setViews(views);
@@ -184,30 +181,5 @@ public class EventPublicServiceImpl extends AbstractEventService implements Even
                 .collect(Collectors.toSet());
 
         return getUsersByIds(new ArrayList<>(initiatorIds));
-    }
-
-    private UserDto getUserById(Long userId) {
-        try {
-            return userClient.getUserById(userId);
-        } catch (Exception e) {
-            log.warn("Не удалось получить пользователя с ID {}: {}", userId, e.getMessage());
-            throw new NotFoundException("Пользователь c userId " + userId + " не найден");
-        }
-    }
-
-    private Map<Long, UserDto> getUsersByIds(List<Long> userIds) {
-        if (userIds.isEmpty()) {
-            return new HashMap<>();
-        }
-
-        try {
-            List<UserDto> users = userClient.getUsers(userIds);
-            return users.stream()
-                    .collect(Collectors.toMap(UserDto::getId, Function.identity()));
-        } catch (Exception e) {
-            log.error("Failed to get users from user-service: {}", e.getMessage());
-            // Возвращаем пустую мапу, чтобы не падать полностью
-            return new HashMap<>();
-        }
     }
 }

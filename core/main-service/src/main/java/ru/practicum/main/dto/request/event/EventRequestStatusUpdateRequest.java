@@ -6,7 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import ru.practicum.main.model.Request;
+import ru.practicum.main.dto.response.request.RequestDto;
 
 import java.util.Set;
 
@@ -20,5 +20,5 @@ public class EventRequestStatusUpdateRequest {
     private Set<Long> requestIds;
 
     @NotNull(message = "Статус не может быть null")
-    private Request.RequestStatus status;
+    private RequestDto.RequestStatusDto status;
 }

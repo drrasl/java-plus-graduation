@@ -1,0 +1,18 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="RequestApplicationTest" type="Application" factoryName="Application">
+    <envs>
+      <env name="SPRING_PROFILES_ACTIVE" value="test" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="ru.practicum.request.RequestApplication" />
+    <module name="request-service" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="ru.practicum.request.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

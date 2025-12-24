@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.practicum.main.client.request.RequestClient;
 import ru.practicum.main.client.user.UserClient;
 import ru.practicum.main.dto.mappers.EventMapper;
 import ru.practicum.main.dto.mappers.LocationMapper;
@@ -24,14 +25,12 @@ import ru.practicum.main.model.LocationEntity;
 import ru.practicum.main.repository.CategoryRepository;
 import ru.practicum.main.repository.EventRepository;
 import ru.practicum.main.repository.LocationRepository;
-import ru.practicum.main.repository.RequestRepository;
 import ru.practicum.main.service.interfaces.EventAdminService;
 import ru.practicum.stats.client.StatClient;
 import ru.practicum.main.model.QEvent;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -42,19 +41,17 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
     private final EventRepository eventRepository;
     private final CategoryRepository categoryRepository;
     private final LocationRepository locationRepository;
-    private final UserClient userClient;
 
-    public EventAdminServiceImpl(RequestRepository requestRepository,
+    public EventAdminServiceImpl(RequestClient requestClient,
                                  StatClient statClient,
+                                 UserClient userClient,
                                  EventRepository eventRepository,
                                  CategoryRepository categoryRepository,
-                                 LocationRepository locationRepository,
-                                 UserClient userClient) {
-        super(requestRepository, statClient);
+                                 LocationRepository locationRepository) {
+        super(requestClient, statClient, userClient);
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
         this.locationRepository = locationRepository;
-        this.userClient = userClient;
     }
 
     @Override
@@ -108,7 +105,7 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
         UserDto userDto = getUserById(event.getInitiatorId());
 
         Long views = getEventViews(eventId);
-        Integer confirmedRequests = requestRepository.countConfirmedRequestsByEventId(eventId);
+        Integer confirmedRequests = getConfirmedRequestsCount(eventId);
         updatedEvent.setConfirmedRequests(confirmedRequests);
 
         EventFullDto result = EventMapper.toEventFullDto(updatedEvent, userDto);
@@ -232,30 +229,5 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
                 .collect(Collectors.toSet());
 
         return getUsersByIds(new ArrayList<>(initiatorIds));
-    }
-
-    private Map<Long, UserDto> getUsersByIds(List<Long> userIds) {
-        if (userIds.isEmpty()) {
-            return new HashMap<>();
-        }
-
-        try {
-            List<UserDto> users = userClient.getUsers(userIds);
-            return users.stream()
-                    .collect(Collectors.toMap(UserDto::getId, Function.identity()));
-        } catch (Exception e) {
-            log.error("Failed to get users from user-service: {}", e.getMessage());
-            // Возвращаем пустую мапу, чтобы не падать полностью
-            return new HashMap<>();
-        }
-    }
-
-    private UserDto getUserById(Long userId) {
-        try {
-            return userClient.getUserById(userId);
-        } catch (Exception e) {
-            log.warn("Не удалось получить пользователя с ID {}: {}", userId, e.getMessage());
-            throw new NotFoundException("Пользователь c userId " + userId + " не найден");
-        }
     }
 }

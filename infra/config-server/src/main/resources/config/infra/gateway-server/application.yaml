@@ -39,7 +39,7 @@ spring:
 
         # Запросы
         - id: requests_all
-          uri: lb://main-service
+          uri: lb://request-service
           predicates:
             - Path=/users/*/requests/**
           filters:
@@ -56,11 +56,11 @@ spring:
 resilience4j.circuitbreaker:
   configs:
     default:
-      slidingWindowSize: 10
+      slidingWindowSize: 30
       failureRateThreshold: 50
-      waitDurationInOpenState: 10s
+      waitDurationInOpenState: 10000
       permittedNumberOfCallsInHalfOpenState: 3
-      minimumNumberOfCalls: 5
+      minimumNumberOfCalls: 7
       automaticTransitionFromOpenToHalfOpenEnabled: true
       slidingWindowType: COUNT_BASED
 

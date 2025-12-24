@@ -3,24 +3,30 @@ package ru.practicum.main.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import ru.practicum.main.client.request.RequestClient;
+import ru.practicum.main.client.user.UserClient;
 import ru.practicum.main.dto.response.request.ConfirmedRequestsCountDto;
+import ru.practicum.main.dto.response.user.UserDto;
+import ru.practicum.main.exception.NotFoundException;
 import ru.practicum.main.model.Event;
-import ru.practicum.main.repository.RequestRepository;
 import ru.practicum.stats.client.StatClient;
 import ru.practicum.stats.dto.dto.ViewStatsDto;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
 @RequiredArgsConstructor
 public abstract class AbstractEventService {
 
-    protected final RequestRepository requestRepository;
+    protected final RequestClient requestClient;
     protected final StatClient statClient;
+    protected final UserClient userClient;
 
     protected Map<Long, Long> getEventsViews(List<Event> events) {
         if (events.isEmpty()) {
@@ -88,7 +94,8 @@ public abstract class AbstractEventService {
         List<Long> eventIds = events.stream()
                 .map(Event::getId)
                 .toList();
-        List<ConfirmedRequestsCountDto> results = requestRepository.countConfirmedRequestsByEventIds(eventIds);
+        try {
+        List<ConfirmedRequestsCountDto> results = requestClient.countConfirmedRequestsByEventIds(eventIds);
         Map<Long, Long> confirmedRequestsMap = results.stream()
                 .collect(Collectors.toMap(
                         ConfirmedRequestsCountDto::getEventId,
@@ -99,9 +106,50 @@ public abstract class AbstractEventService {
                         eventId -> eventId,
                         eventId -> confirmedRequestsMap.getOrDefault(eventId, 0L).intValue()
                 ));
+        } catch (Exception e) {
+            log.warn("Не удалось получить количество подтвержденных запросов для событий {}: {}",
+                    eventIds, e.getMessage());
+            // Возвращаем 0 для всех событий при ошибке
+            return eventIds.stream()
+                    .collect(Collectors.toMap(
+                            eventId -> eventId,
+                            eventId -> 0
+                    ));
+        }
     }
 
-    protected Integer getConfirmedRequests(Long eventId) {
-        return requestRepository.countConfirmedRequestsByEventId(eventId);
+    protected Integer getConfirmedRequestsCount(Long eventId) {
+        try {
+            return requestClient.countConfirmedRequestsByEventId(eventId);
+        } catch (Exception e) {
+            log.warn("Не удалось получить количество подтвержденных запросов для события {}: {}",
+                    eventId, e.getMessage());
+            return 0; // Возвращаем 0 при ошибке
+        }
+    }
+
+    protected Map<Long, UserDto> getUsersByIds(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        try {
+            List<UserDto> users = userClient.getUsers(userIds);
+            return users.stream()
+                    .collect(Collectors.toMap(UserDto::getId, Function.identity()));
+        } catch (Exception e) {
+            log.error("Failed to get users from user-service: {}", e.getMessage());
+            // Возвращаем пустую мапу, чтобы не падать полностью
+            return new HashMap<>();
+        }
+    }
+
+    protected UserDto getUserById(Long userId) {
+        try {
+            return userClient.getUserById(userId);
+        } catch (Exception e) {
+            log.warn("Не удалось получить пользователя с ID {}: {}", userId, e.getMessage());
+            throw new NotFoundException("Пользователь c userId " + userId + " не найден");
+        }
     }
 }

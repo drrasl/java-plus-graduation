@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.practicum.main.client.request.RequestClient;
 import ru.practicum.main.client.user.UserClient;
 import ru.practicum.main.dto.mappers.EventMapper;
 import ru.practicum.main.dto.mappers.LocationMapper;
@@ -14,6 +15,8 @@ import ru.practicum.main.dto.response.event.EventFullDto;
 import ru.practicum.main.dto.response.event.EventRequestStatusUpdateResult;
 import ru.practicum.main.dto.response.event.EventShortDto;
 import ru.practicum.main.dto.response.request.ParticipationRequestDto;
+import ru.practicum.main.dto.response.request.RequestDto;
+import ru.practicum.main.dto.response.request.RequestStatusUpdateDto;
 import ru.practicum.main.dto.response.user.UserDto;
 import ru.practicum.main.exception.ConflictException;
 import ru.practicum.main.exception.NotFoundException;
@@ -28,6 +31,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -36,19 +40,17 @@ import java.util.stream.Collectors;
 public class EventPrivateServiceImpl extends AbstractEventService implements EventPrivateService {
 
     private final EventRepository eventRepository;
-    private final UserClient userClient;
     private final CategoryRepository categoryRepository;
     private final LocationRepository locationRepository;
 
-    public EventPrivateServiceImpl(RequestRepository requestRepository,
+    public EventPrivateServiceImpl(RequestClient requestClient,
                                    StatClient statClient,
                                    EventRepository eventRepository,
                                    UserClient userClient,
                                    CategoryRepository categoryRepository,
                                    LocationRepository locationRepository) {
-        super(requestRepository, statClient);
+        super(requestClient, statClient, userClient);
         this.eventRepository = eventRepository;
-        this.userClient = userClient;
         this.categoryRepository = categoryRepository;
         this.locationRepository = locationRepository;
     }
@@ -96,7 +98,7 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
     public EventFullDto getEvent(Long eventId, Long userId) {
         UserDto userDto = validateAndGetUser(userId);
         Event event = validateEventOfInitiator(eventId, userId);
-        Integer confirmedRequests = requestRepository.countConfirmedRequestsByEventId(eventId);
+        Integer confirmedRequests = getConfirmedRequestsCount(eventId);
         event.setConfirmedRequests(confirmedRequests);
         Long views = getEventViews(eventId);
         EventFullDto result = EventMapper.toEventFullDto(event, userDto);
@@ -124,7 +126,7 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         if (updateEventUserRequest.getStateAction() != null) {
             processStateAction(event, updateEventUserRequest.getStateAction());
         }
-        Integer confirmedRequests = requestRepository.countConfirmedRequestsByEventId(eventId);
+        Integer confirmedRequests = getConfirmedRequestsCount(eventId);
         event.setConfirmedRequests(confirmedRequests);
         Event updatedEvent = eventRepository.save(event);
         Long views = getEventViews(eventId);
@@ -184,7 +186,13 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         log.debug("Получение запросов на участие в событии {} пользователя {}", eventId, userId);
         UserDto userDto = validateAndGetUser(userId);
         Event event = validateEventOfInitiator(eventId, userId);
-        List<Request> requests = requestRepository.findAllByEventId(eventId);
+        List<RequestDto> requests;
+        try {
+            requests = requestClient.getRequestsByEventId(eventId);
+        } catch (Exception e) {
+            log.warn("Не удалось получить запросы для события {}: {}", eventId, e.getMessage());
+            return Collections.emptyList();
+        }
         if (requests.isEmpty()) {
             log.debug("Запросы на участие в событии {} не найдены", eventId);
             return Collections.emptyList();
@@ -206,7 +214,7 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         if (!isModerationRequired(event)) {
             throw new ConflictException("Подтверждение заявок не требуется для этого события");
         }
-        List<Request> requestsToProcess = getRequestsToProcess(updateRequest.getRequestIds().stream().toList(), eventId);
+        List<RequestDto> requestsToProcess = getRequestsToProcess(updateRequest.getRequestIds().stream().toList(), eventId);
         validateRequestsCanBeProcessed(requestsToProcess, event, updateRequest.getStatus());
         EventRequestStatusUpdateResult result = processRequests(requestsToProcess, event, updateRequest.getStatus());
         log.info("Статусы заявок для события {} обновлены: подтверждено {}, отклонено {}",
@@ -259,19 +267,25 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         return event.getParticipantLimit() != 0 && event.getRequestModeration();
     }
 
-    private List<Request> getRequestsToProcess(List<Long> requestIds, Long eventId) {
-        List<Request> requests = requestRepository.findAllByIdInAndEventId(requestIds, eventId);
-
+    private List<RequestDto> getRequestsToProcess(List<Long> requestIds, Long eventId) {
+        List<RequestDto> requests;
+        try {
+            requests = requestClient.findAllByIdInAndEventId(requestIds, eventId);
+        } catch (Exception e) {
+            log.warn("Не удалось получить запросы по IDs {} для события {}: {}",
+                    requestIds, eventId, e.getMessage());
+            throw new NotFoundException("Не удалось получить запросы");
+        }
         if (requests.size() != requestIds.size()) {
             throw new NotFoundException("Некоторые запросы не найдены или не принадлежат событию");
         }
         return requests;
     }
 
-    private void validateRequestsCanBeProcessed(List<Request> requests, Event event, Request.RequestStatus newStatus) {
+    private void validateRequestsCanBeProcessed(List<RequestDto> requests, Event event, RequestDto.RequestStatusDto newStatus) {
         // Проверяем что все запросы в состоянии PENDING
         requests.forEach(request -> {
-            if (request.getStatus() != Request.RequestStatus.PENDING) {
+            if (request.getStatus() != RequestDto.RequestStatusDto.PENDING) {
                 throw new ConflictException(
                         String.format("Запрос %d уже обработан (статус: %s)",
                                 request.getId(), request.getStatus()));
@@ -279,8 +293,8 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         });
 
         // Проверяем лимит участников для подтверждения
-        if (newStatus == Request.RequestStatus.CONFIRMED) {
-            int confirmedCount = requestRepository.countConfirmedRequestsByEventId(event.getId());
+        if (newStatus == RequestDto.RequestStatusDto.CONFIRMED) {
+            int confirmedCount = getConfirmedRequestsCount(event.getId());
             int availableSlots = event.getParticipantLimit() - confirmedCount;
 
             if (availableSlots <= 0) {
@@ -295,68 +309,145 @@ public class EventPrivateServiceImpl extends AbstractEventService implements Eve
         }
     }
 
-    private EventRequestStatusUpdateResult processRequests(List<Request> requests, Event event,
-                                                           Request.RequestStatus newStatus) {
+    private EventRequestStatusUpdateResult processRequests(List<RequestDto> requests, Event event,
+                                                           RequestDto.RequestStatusDto newStatus) {
         EventRequestStatusUpdateResult result = new EventRequestStatusUpdateResult();
 
-        if (newStatus == Request.RequestStatus.CONFIRMED) {
+        if (newStatus == RequestDto.RequestStatusDto.CONFIRMED) {
             processConfirmation(requests, event, result);
-        } else if (newStatus == Request.RequestStatus.REJECTED) {
-            processRejection(requests, result);
+        } else if (newStatus == RequestDto.RequestStatusDto.REJECTED) {
+            processRejection(requests, event, result);
         }
 
         return result;
     }
 
-    private void processConfirmation(List<Request> requests, Event event,
+    private void processConfirmation(List<RequestDto> requests, Event event,
                                      EventRequestStatusUpdateResult result) {
-        int confirmedCount = requestRepository.countConfirmedRequestsByEventId(event.getId());
+        int confirmedCount = getConfirmedRequestsCount(event.getId());
         int availableSlots = event.getParticipantLimit() - confirmedCount;
 
         // Подтверждаем сколько можем
-        List<Request> toConfirm = requests.stream()
+        List<RequestDto> toConfirm = requests.stream()
                 .limit(availableSlots)
                 .toList();
 
         // Отклоняем остальные (если лимит исчерпан)
-        List<Request> toReject = requests.stream()
+        List<RequestDto> toReject = requests.stream()
                 .skip(availableSlots)
                 .toList();
 
-        // Подтверждаем запросы
-        toConfirm.forEach(request -> {
-            request.setStatus(Request.RequestStatus.CONFIRMED);
-            requestRepository.save(request);
-        });
+        // Получаем ID всех запросов для обновления
+        List<Long> allRequestIds = requests.stream()
+                .map(RequestDto::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
 
-        // Отклоняем запросы (если есть)
-        if (!toReject.isEmpty()) {
-            toReject.forEach(request -> {
-                request.setStatus(Request.RequestStatus.REJECTED);
-                requestRepository.save(request);
-            });
+        // Обновляем статусы
+        if (!toConfirm.isEmpty()) {
+            List<Long> confirmIds = toConfirm.stream()
+                    .map(RequestDto::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            updateRequestsStatusInternal(confirmIds, RequestDto.RequestStatusDto.CONFIRMED);
         }
 
-        // Заполняем результат
-        result.setConfirmedRequests(toConfirm.stream()
+        if (!toReject.isEmpty()) {
+            List<Long> rejectIds = toReject.stream()
+                    .map(RequestDto::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            updateRequestsStatusInternal(rejectIds, RequestDto.RequestStatusDto.REJECTED);
+        }
+
+        updateEventConfirmedRequests(event);
+
+        // ЗАНОВО ПОЛУЧАЕМ ОБНОВЛЕННЫЕ ЗАПРОСЫ ИЗ REQUEST-SERVICE
+        List<RequestDto> updatedRequests = getUpdatedRequests(allRequestIds, event.getId());
+
+        // Разделяем обновленные запросы по статусам
+        List<RequestDto> updatedConfirmed = updatedRequests.stream()
+                .filter(req -> RequestDto.RequestStatusDto.CONFIRMED == req.getStatus())
+                .collect(Collectors.toList());
+
+        List<RequestDto> updatedRejected = updatedRequests.stream()
+                .filter(req -> RequestDto.RequestStatusDto.REJECTED == req.getStatus())
+                .collect(Collectors.toList());
+
+        // Заполняем результат ОБНОВЛЕННЫМИ данными
+        result.setConfirmedRequests(updatedConfirmed.stream()
                 .map(RequestMapper::toParticipationRequestDto)
                 .collect(Collectors.toList()));
 
-        result.setRejectedRequests(toReject.stream()
+        result.setRejectedRequests(updatedRejected.stream()
                 .map(RequestMapper::toParticipationRequestDto)
                 .collect(Collectors.toList()));
+
+        log.debug("После подтверждения: CONFIRMED={}, REJECTED={}",
+                updatedConfirmed.size(), updatedRejected.size());
     }
 
-    private void processRejection(List<Request> requests, EventRequestStatusUpdateResult result) {
-        requests.forEach(request -> {
-            request.setStatus(Request.RequestStatus.REJECTED);
-            requestRepository.save(request);
-        });
+    private void processRejection(List<RequestDto> requests, Event event, EventRequestStatusUpdateResult result) {
 
-        result.setRejectedRequests(requests.stream()
+        // Получаем ID запросов
+        List<Long> requestIds = requests.stream()
+                .map(RequestDto::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        // Обновляем статусы
+        updateRequestsStatusInternal(requestIds, RequestDto.RequestStatusDto.REJECTED);
+
+        updateEventConfirmedRequests(event);
+
+        // ЗАНОВО ПОЛУЧАЕМ ОБНОВЛЕННЫЕ ЗАПРОСЫ ИЗ REQUEST-SERVICE
+        List<RequestDto> updatedRequests = getUpdatedRequests(requestIds, event.getId());
+
+        result.setRejectedRequests(updatedRequests.stream()
                 .map(RequestMapper::toParticipationRequestDto)
                 .collect(Collectors.toList()));
 
         result.setConfirmedRequests(Collections.emptyList());
+
+        log.debug("После отклонения: REJECTED={}", updatedRequests.size());
+    }
+
+    private void updateRequestsStatusInternal(List<Long> requestIds, RequestDto.RequestStatusDto status) {
+        try {
+            if (requestIds == null || requestIds.isEmpty()) {
+                log.debug("Нет ID запросов для обновления");
+                return;
+            }
+
+            RequestStatusUpdateDto updateDto = RequestStatusUpdateDto.builder()
+                    .requestIds(requestIds)
+                    .status(status.name())
+                    .build();
+
+            requestClient.updateRequestsStatus(updateDto);
+            log.debug("Обновление статусов {} запросов на {}", requestIds.size(), status);
+        } catch (Exception e) {
+            log.warn("Не удалось обновить статусы запросов: {}", e.getMessage());
+            throw new ConflictException("Не удалось обновить статусы запросов");
+        }
+    }
+
+    private void updateEventConfirmedRequests(Event event) {
+        // Получаем актуальное количество подтвержденных запросов
+        int confirmedCount = getConfirmedRequestsCount(event.getId());
+        event.setConfirmedRequests(confirmedCount);
+        eventRepository.save(event);
+        log.debug("Обновлено confirmedRequests для события {}: {}", event.getId(), confirmedCount);
+    }
+
+    private List<RequestDto> getUpdatedRequests(List<Long> requestIds, Long eventId) {
+        try {
+            // Запрашиваем обновленные запросы из request-service
+            return requestClient.findAllByIdInAndEventId(requestIds, eventId);
+        } catch (Exception e) {
+            log.warn("Не удалось получить обновленные запросы: {}", e.getMessage());
+            // Если не удалось получить обновленные, возвращаем пустой список
+            return Collections.emptyList();
+        }
     }
 }
