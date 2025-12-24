@@ -62,11 +62,10 @@ resilience4j:
         sliding-window-type: COUNT_BASED
         minimum-number-of-calls: 7
         automatic-transition-from-open-to-half-open-enabled: true
-      main-service:
+      event-service:
         sliding-window-size: 30
         wait-duration-in-open-state: 10000
         permitted-number-of-calls-in-half-open-state: 3
         sliding-window-type: COUNT_BASED
         minimum-number-of-calls: 7
         automatic-transition-from-open-to-half-open-enabled: true
-# TODO Здесь надо будет поменять main-service на event-service

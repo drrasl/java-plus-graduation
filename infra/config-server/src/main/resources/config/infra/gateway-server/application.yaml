@@ -7,7 +7,7 @@ spring:
       routes:
         # Категории
         - id: categories_all
-          uri: lb://main-service
+          uri: lb://event-service
           predicates:
             - Path=/categories/**, /admin/categories/**
           filters:
@@ -23,7 +23,7 @@ spring:
 
         # Компиляции
         - id: compilations_all
-          uri: lb://main-service
+          uri: lb://event-service
           predicates:
             - Path=/compilations/**, /admin/compilations/**
           filters:
@@ -31,7 +31,7 @@ spring:
 
         # Ивенты
         - id: events_all
-          uri: lb://main-service
+          uri: lb://event-service
           predicates:
             - Path=/events/**, /users/*/events/**, /admin/events/**
           filters:

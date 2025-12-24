@@ -6,8 +6,8 @@
       <env name="SPRING_PROFILES_ACTIVE" value="test" />
     </envs>
     <option name="MAIN_CLASS_NAME" value="ru.practicum.main.MainApplication" />
-    <module name="main-service" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/core/main-service" />
+    <module name="event-service" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/core/event-service" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>
