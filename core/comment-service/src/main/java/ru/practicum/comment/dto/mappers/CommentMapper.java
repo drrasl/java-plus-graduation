@@ -1,13 +1,13 @@
-package ru.practicum.main.dto.mappers;
+package ru.practicum.comment.dto.mappers;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import ru.practicum.main.dto.request.comment.NewCommentDto;
-import ru.practicum.main.dto.response.comment.CommentDto;
-import ru.practicum.main.dto.response.user.UserDto;
-import ru.practicum.main.model.Comment;
+import ru.practicum.comment.dto.request.comment.NewCommentDto;
+import ru.practicum.comment.dto.response.comment.CommentDto;
+import ru.practicum.comment.dto.response.user.UserDto;
+import ru.practicum.comment.model.Comment;
 
-import static ru.practicum.main.dto.mappers.UserMapper.toUserShortDto;
+import static ru.practicum.comment.dto.mappers.UserMapper.toUserShortDto;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class CommentMapper {

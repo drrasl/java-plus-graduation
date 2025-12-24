@@ -1,17 +1,17 @@
-package ru.practicum.main.service;
+package ru.practicum.comment.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import ru.practicum.main.client.user.UserClient;
-import ru.practicum.main.dto.mappers.CommentMapper;
-import ru.practicum.main.dto.response.comment.CommentDto;
-import ru.practicum.main.dto.response.user.UserDto;
-import ru.practicum.main.exception.NotFoundException;
-import ru.practicum.main.model.Comment;
-import ru.practicum.main.repository.CommentRepository;
-import ru.practicum.main.service.interfaces.CommentPublicService;
+import ru.practicum.comment.client.user.UserClient;
+import ru.practicum.comment.dto.mappers.CommentMapper;
+import ru.practicum.comment.dto.response.comment.CommentDto;
+import ru.practicum.comment.dto.response.user.UserDto;
+import ru.practicum.comment.exception.NotFoundException;
+import ru.practicum.comment.model.Comment;
+import ru.practicum.comment.repository.CommentRepository;
+import ru.practicum.comment.service.interfaces.CommentPublicService;
 
 import java.util.*;
 import java.util.function.Function;

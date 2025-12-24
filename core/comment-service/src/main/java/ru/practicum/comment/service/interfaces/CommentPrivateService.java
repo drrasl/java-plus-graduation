@@ -1,8 +1,8 @@
-package ru.practicum.main.service.interfaces;
+package ru.practicum.comment.service.interfaces;
 
 import org.springframework.data.domain.Pageable;
-import ru.practicum.main.dto.request.comment.NewCommentDto;
-import ru.practicum.main.dto.response.comment.CommentDto;
+import ru.practicum.comment.dto.request.comment.NewCommentDto;
+import ru.practicum.comment.dto.response.comment.CommentDto;
 
 import java.util.List;
 

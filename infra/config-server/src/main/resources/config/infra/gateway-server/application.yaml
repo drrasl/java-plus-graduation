@@ -15,7 +15,7 @@ spring:
 
         # Комментарии
         - id: comments_all
-          uri: lb://main-service
+          uri: lb://comment-service
           predicates:
             - Path=/events/*/comments, /users/*/comments/**, /admin/comments/**
           filters:

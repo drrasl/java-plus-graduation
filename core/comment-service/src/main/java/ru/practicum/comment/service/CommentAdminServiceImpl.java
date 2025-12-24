@@ -1,4 +1,4 @@
-package ru.practicum.main.service;
+package ru.practicum.comment.service;
 
 import com.querydsl.core.BooleanBuilder;
 import lombok.RequiredArgsConstructor;
@@ -6,16 +6,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.practicum.main.client.user.UserClient;
-import ru.practicum.main.dto.mappers.CommentMapper;
-import ru.practicum.main.dto.request.comment.SearchOfCommentByAdminDto;
-import ru.practicum.main.dto.response.comment.CommentDto;
-import ru.practicum.main.dto.response.user.UserDto;
-import ru.practicum.main.exception.NotFoundException;
-import ru.practicum.main.model.Comment;
-import ru.practicum.main.model.QComment;
-import ru.practicum.main.repository.CommentRepository;
-import ru.practicum.main.service.interfaces.CommentAdminService;
+import ru.practicum.comment.client.user.UserClient;
+import ru.practicum.comment.dto.mappers.CommentMapper;
+import ru.practicum.comment.dto.request.comment.SearchOfCommentByAdminDto;
+import ru.practicum.comment.dto.response.comment.CommentDto;
+import ru.practicum.comment.dto.response.user.UserDto;
+import ru.practicum.comment.exception.NotFoundException;
+import ru.practicum.comment.model.Comment;
+import ru.practicum.comment.model.QComment;
+import ru.practicum.comment.repository.CommentRepository;
+import ru.practicum.comment.service.interfaces.CommentAdminService;
 
 import java.util.HashMap;
 import java.util.List;
@@ -55,7 +55,7 @@ public class CommentAdminServiceImpl implements CommentAdminService {
             predicate.and(comment.userId.in(searchDto.getUsers()));
         }
         if (searchDto.getEvents() != null && !searchDto.getEvents().isEmpty()) {
-            predicate.and(comment.event.id.in(searchDto.getEvents()));
+            predicate.and(comment.eventId.in(searchDto.getEvents()));
         }
         if (searchDto.getRangeStart() != null) {
             predicate.and(comment.createdOn.goe(searchDto.getRangeStart()));

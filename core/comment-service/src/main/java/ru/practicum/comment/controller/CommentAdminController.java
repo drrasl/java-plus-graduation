@@ -1,4 +1,4 @@
-package ru.practicum.main.controller;
+package ru.practicum.comment.controller;
 
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -10,9 +10,9 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import ru.practicum.main.dto.request.comment.SearchOfCommentByAdminDto;
-import ru.practicum.main.dto.response.comment.CommentDto;
-import ru.practicum.main.service.interfaces.CommentAdminService;
+import ru.practicum.comment.dto.request.comment.SearchOfCommentByAdminDto;
+import ru.practicum.comment.dto.response.comment.CommentDto;
+import ru.practicum.comment.service.interfaces.CommentAdminService;
 
 import java.time.LocalDateTime;
 import java.util.List;

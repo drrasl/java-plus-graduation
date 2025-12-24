@@ -1,4 +1,4 @@
-package ru.practicum.main.model;
+package ru.practicum.comment.model;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -21,9 +21,8 @@ public class Comment {
     private Long id;
     @Column(name = "user_id", nullable = false)
     private Long userId;
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "event_id", nullable = false)
-    private Event event;
+    @Column(name = "event_id", nullable = false)
+    private Long eventId;
     @Column(name = "text", length = 5000)
     private String text;
     @CreationTimestamp

@@ -1,28 +1,26 @@
-package ru.practicum.main.service;
+package ru.practicum.comment.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.practicum.main.client.user.UserClient;
-import ru.practicum.main.dto.mappers.CommentMapper;
-import ru.practicum.main.dto.request.comment.NewCommentDto;
-import ru.practicum.main.dto.response.comment.CommentDto;
-import ru.practicum.main.dto.response.user.UserDto;
-import ru.practicum.main.exception.NotFoundException;
-import ru.practicum.main.model.Comment;
-import ru.practicum.main.model.Event;
-import ru.practicum.main.repository.CommentRepository;
-import ru.practicum.main.repository.EventRepository;
-import ru.practicum.main.service.interfaces.CommentPrivateService;
+import ru.practicum.comment.client.event.EventClient;
+import ru.practicum.comment.client.user.UserClient;
+import ru.practicum.comment.dto.mappers.CommentMapper;
+import ru.practicum.comment.dto.request.comment.NewCommentDto;
+import ru.practicum.comment.dto.response.comment.CommentDto;
+import ru.practicum.comment.dto.response.event.EventDto;
+import ru.practicum.comment.dto.response.user.UserDto;
+import ru.practicum.comment.exception.NotFoundException;
+import ru.practicum.comment.model.Comment;
+import ru.practicum.comment.repository.CommentRepository;
+import ru.practicum.comment.service.interfaces.CommentPrivateService;
+
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import static ru.practicum.main.dto.mappers.CommentMapper.toEntity;
-import static ru.practicum.main.dto.mappers.CommentMapper.toDto;
 
 @Service
 @RequiredArgsConstructor
@@ -32,26 +30,32 @@ public class CommentPrivateServiceImpl implements CommentPrivateService {
 
     private final CommentRepository commentRepository;
     private final UserClient userClient;
-    private final EventRepository eventRepository;
+    private final EventClient eventClient;
 
     @Override
     @Transactional
     public CommentDto addComment(Long userId, Long eventId, NewCommentDto newCommentDto) {
         log.info("Пользователь с ID: {} добавляет комментарий к событию с ID: {}", userId, eventId);
         UserDto user = getUserById(userId);
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new NotFoundException(String.format("Event with id=%s was not found", eventId)));
+        EventDto event;
+        try {
+            event = eventClient.getEventById(eventId);
+            log.debug("Existing Event received from event-service: {}", event);
+        } catch (Exception e) {
+            log.debug("Failed to get event from event-service: {}", e.getMessage());
+            throw new NotFoundException("Событие c userId " + eventId + " не найдено");
+        }
 
-        Comment comment = toEntity(newCommentDto);
+        Comment comment = CommentMapper.toEntity(newCommentDto);
         comment.setUserId(userId);
-        comment.setEvent(event);
+        comment.setEventId(event.getId());
         comment.setCreatedOn(LocalDateTime.now());
         comment.setUpdatedOn(LocalDateTime.now()); // Установим initial timestamp
 
         Comment savedComment = commentRepository.save(comment);
         log.info("Добавлен новый комментарий: {}", savedComment);
 
-        return toDto(savedComment, user);
+        return CommentMapper.toDto(savedComment, user);
     }
 
     @Override
@@ -87,7 +91,7 @@ public class CommentPrivateServiceImpl implements CommentPrivateService {
         Comment updatedComment = commentRepository.save(comment);
 
         log.info("Комментарий с ID: {} обновлен", commentId);
-        return toDto(updatedComment, user);
+        return CommentMapper.toDto(updatedComment, user);
     }
 
     @Override

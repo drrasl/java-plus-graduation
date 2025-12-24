@@ -1,4 +1,4 @@
-package ru.practicum.main.controller;
+package ru.practicum.comment.controller;
 
 
 import jakarta.validation.constraints.Positive;
@@ -10,8 +10,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import ru.practicum.main.dto.response.comment.CommentDto;
-import ru.practicum.main.service.interfaces.CommentPublicService;
+import ru.practicum.comment.dto.response.comment.CommentDto;
+import ru.practicum.comment.service.interfaces.CommentPublicService;
 
 import java.util.List;
 
