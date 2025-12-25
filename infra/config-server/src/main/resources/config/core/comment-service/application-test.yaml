@@ -12,6 +12,13 @@ spring:
         jdbc:
           time_zone: UTC
     show-sql: true
+  cloud:
+    config:
+      fail-fast: true
+      retry:
+        initial-interval: 3000
+        max-attempts: 10
+        max-interval: 10000
 
   sql:
     init:
