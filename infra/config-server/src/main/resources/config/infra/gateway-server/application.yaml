@@ -7,7 +7,7 @@ spring:
       routes:
         # Категории
         - id: categories_all
-          uri: lb://main-service
+          uri: lb://event-service
           predicates:
             - Path=/categories/**, /admin/categories/**
           filters:
@@ -15,7 +15,7 @@ spring:
 
         # Комментарии
         - id: comments_all
-          uri: lb://main-service
+          uri: lb://comment-service
           predicates:
             - Path=/events/*/comments, /users/*/comments/**, /admin/comments/**
           filters:
@@ -23,7 +23,7 @@ spring:
 
         # Компиляции
         - id: compilations_all
-          uri: lb://main-service
+          uri: lb://event-service
           predicates:
             - Path=/compilations/**, /admin/compilations/**
           filters:
@@ -31,7 +31,7 @@ spring:
 
         # Ивенты
         - id: events_all
-          uri: lb://main-service
+          uri: lb://event-service
           predicates:
             - Path=/events/**, /users/*/events/**, /admin/events/**
           filters:
@@ -39,7 +39,7 @@ spring:
 
         # Запросы
         - id: requests_all
-          uri: lb://main-service
+          uri: lb://request-service
           predicates:
             - Path=/users/*/requests/**
           filters:
@@ -47,7 +47,7 @@ spring:
 
         # Пользователи
         - id: users_all
-          uri: lb://main-service
+          uri: lb://user-service
           predicates:
             - Path=/admin/users/**
           filters:
@@ -58,7 +58,7 @@ resilience4j.circuitbreaker:
     default:
       slidingWindowSize: 10
       failureRateThreshold: 50
-      waitDurationInOpenState: 10s
+      waitDurationInOpenState: 10000
       permittedNumberOfCallsInHalfOpenState: 3
       minimumNumberOfCalls: 5
       automaticTransitionFromOpenToHalfOpenEnabled: true

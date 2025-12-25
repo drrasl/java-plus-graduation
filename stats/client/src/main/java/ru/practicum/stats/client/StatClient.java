@@ -5,7 +5,6 @@ import org.springframework.cloud.client.discovery.DiscoveryClient;
 import ru.practicum.stats.client.exception.StatsServerUnavailable;
 import ru.practicum.stats.dto.dto.EndpointHitDto;
 import ru.practicum.stats.dto.dto.ViewStatsDto;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
@@ -13,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.DefaultUriBuilderFactory;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.LocalDateTime;
