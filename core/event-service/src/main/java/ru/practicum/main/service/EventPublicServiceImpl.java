@@ -1,5 +1,6 @@
 package ru.practicum.main.service;
 
+import com.google.protobuf.Timestamp;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,9 +23,14 @@ import ru.practicum.main.model.Event;
 import ru.practicum.main.model.QEvent;
 import ru.practicum.main.repository.EventRepository;
 import ru.practicum.main.service.interfaces.EventPublicService;
-import ru.practicum.stats.client.StatClient;
-import ru.practicum.stats.dto.dto.EndpointHitDto;
+import ru.practicum.stats.client.CollectorClient;
+import ru.practicum.stats.client.RecommendationsClient;
+import ru.practicum.stats.proto.ActionTypeProto;
+import ru.practicum.stats.proto.RecommendedEventProto;
+import ru.practicum.stats.proto.UserActionProto;
+import ru.practicum.stats.proto.UserPredictionsRequestProto;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -36,11 +42,14 @@ public class EventPublicServiceImpl extends AbstractEventService implements Even
 
     private final EventRepository eventRepository;
 
+    private static final int MAX_RESULTS = 10; //ограничение количества мероприятий в результате выполнения запроса.
+
     public EventPublicServiceImpl(RequestClient requestClient,
-                                  StatClient statClient,
+                                  CollectorClient collectorClient,
+                                  RecommendationsClient recommendationsClient,
                                   EventRepository eventRepository,
                                   UserClient userClient) {
-        super(requestClient, statClient, userClient);
+        super(requestClient, collectorClient, recommendationsClient, userClient);
         this.eventRepository = eventRepository;
     }
 
@@ -56,15 +65,11 @@ public class EventPublicServiceImpl extends AbstractEventService implements Even
         Page<Event> eventsPage = eventRepository.findAll(predicate, pageable);
         if (eventsPage.isEmpty()) {
             log.debug("События по заданным критериям не найдены");
-            // Все равно сохраняем hit даже если нет результатов
-            saveHit(request, "/events");
             return Collections.emptyList();
         }
         List<Event> events = eventsPage.getContent();
-
         Map<Long, UserDto> initiatorsMap = getInitiatorsMap(events);
-
-        Map<Long, Long> views = getEventsViews(events);
+        Map<Long, Double> ratings = getEventsRatings(events);
         Map<Long, Integer> confirmedRequests = getConfirmedRequests(events);
         List<EventShortDto> result = events.stream()
                 .map(event -> {
@@ -77,34 +82,73 @@ public class EventPublicServiceImpl extends AbstractEventService implements Even
                     }
 
                     EventShortDto dto = EventMapper.toEventShortDto(event, userDto);
-                    dto.setViews(views.getOrDefault(event.getId(), 0L));
+                    dto.setRating(ratings.get(event.getId()));
                     dto.setConfirmedRequests(confirmedRequests.getOrDefault(event.getId(), 0));
                     return dto;
                 })
                 .toList();
-        saveHit(request, "/events");
         return result;
     }
 
     @Override
-    public EventFullDto getEvent(Long id, HttpServletRequest request) {
+    public EventFullDto getEvent(Long id, Long userId, HttpServletRequest request) {
+        collectorClient.sendUserAction(createUserAction(id, userId, ActionTypeProto.ACTION_VIEW));
         log.debug("Получение публичного события {}", id);
         Event event = eventRepository.findByIdAndState(id, Event.EventState.PUBLISHED)
                 .orElseThrow(() -> new NotFoundException(
                         String.format("Событие с id=%d не было найдено или не опубликовано", id)));
 
         UserDto userDto = getUserById(event.getInitiatorId());
-
-        Long views = getEventViews(id);
         Integer confirmedRequests = getConfirmedRequestsCount(id);
         event.setConfirmedRequests(confirmedRequests);
         EventFullDto result = EventMapper.toEventFullDto(event, userDto);
-        result.setViews(views);
+        result.setRating(getEventRating(id));
         result.setConfirmedRequests(confirmedRequests);
 
-        saveHit(request, "/events/" + id);
         log.debug("Событие {} найдено", id);
         return result;
+    }
+
+    @Override
+    public List<EventShortDto> getRecommendations(Long userId) {
+        log.debug("Получение рекомендаций для пользователя: {}", userId);
+        List<RecommendedEventProto> recommendedEventProtos =  recommendationsClient.getRecommendationsForUser(
+                UserPredictionsRequestProto.newBuilder()
+                        .setUserId(userId)
+                        .setMaxResults(MAX_RESULTS)
+                        .build()
+        );
+        List<Long> eventIds = recommendedEventProtos.stream()
+                .map(RecommendedEventProto::getEventId)
+                .toList();
+        List<Event> events = eventRepository.findAllById(eventIds);
+        Map<Long, UserDto> initiatorsMap = getInitiatorsMap(events);
+        Map<Long, Double> ratings = getEventsRatings(events);
+        Map<Long, Integer> confirmedRequests = getConfirmedRequests(events);
+        return events.stream()
+                .map(event -> {
+
+                    UserDto userDto = initiatorsMap.get(event.getInitiatorId());
+                    if (userDto == null) {
+                        log.warn("Пользователь с ID {} не найден для события {}",
+                                event.getInitiatorId(), event.getId());
+                        throw new NotFoundException("Пользователь c userId " + event.getInitiatorId() + " не найден");
+                    }
+
+                    EventShortDto dto = EventMapper.toEventShortDto(event, userDto);
+                    dto.setRating(ratings.get(event.getId()));
+                    dto.setConfirmedRequests(confirmedRequests.getOrDefault(event.getId(), 0));
+                    return dto;
+                })
+                .toList();
+    }
+
+    @Override
+    public void like(Long eventId, Long userId) {
+        if (!requestClient.existsByRequesterIdAndEventId(userId, eventId)) {
+            throw new ValidationException("Пользователь " + userId + " не принимал участи в событии " + eventId);
+        }
+        collectorClient.sendUserAction(createUserAction(eventId, userId, ActionTypeProto.ACTION_LIKE));
     }
 
     private Predicate buildPredicate(SearchOfEventByPublicDto searchDto) {
@@ -153,33 +197,24 @@ public class EventPublicServiceImpl extends AbstractEventService implements Even
         return predicate;
     }
 
-    private void saveHit(HttpServletRequest request, String uri) {
-        try {
-            String clientIp = request.getRemoteAddr();
-            String requestUri = request.getRequestURI();
-
-            log.info("Client IP: {}, Endpoint: {}", clientIp, requestUri);
-
-            EndpointHitDto hitDto = EndpointHitDto.builder()
-                    .app("ewm-main-service")
-                    .uri(uri)
-                    .ip(clientIp)
-                    .timestamp(LocalDateTime.now())
-                    .build();
-
-            statClient.hit(hitDto);
-            log.debug("Hit saved: {}", hitDto);
-
-        } catch (Exception e) {
-            log.warn("Ошибка при сохранении статистики: {}", e.getMessage());
-        }
-    }
-
     private Map<Long, UserDto> getInitiatorsMap(List<Event> events) {
         Set<Long> initiatorIds = events.stream()
                 .map(Event::getInitiatorId)
                 .collect(Collectors.toSet());
 
         return getUsersByIds(new ArrayList<>(initiatorIds));
+    }
+
+    UserActionProto createUserAction(Long eventId, Long userId, ActionTypeProto typeProto) {
+        Instant timestamp = Instant.now();
+        return UserActionProto.newBuilder()
+                .setUserId(userId)
+                .setEventId(eventId)
+                .setActionType(typeProto)
+                .setTimestamp(Timestamp.newBuilder()
+                        .setSeconds(timestamp.getEpochSecond())
+                        .setNanos(timestamp.getNano())
+                        .build())
+                .build();
     }
 }

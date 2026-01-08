@@ -12,5 +12,9 @@ public interface EventPublicService {
 
     List<EventShortDto> getEvents(SearchOfEventByPublicDto searchOfEventByPublicDto, Pageable pageable, HttpServletRequest request);
 
-    EventFullDto getEvent(Long id, HttpServletRequest request);
+    EventFullDto getEvent(Long id, Long userId, HttpServletRequest request);
+
+    List<EventShortDto> getRecommendations(Long userId);
+
+    void like(Long eventId, Long userId);
 }

@@ -26,7 +26,7 @@ public class EventMapper {
                 .initiator(UserMapper.toUserShortDto(userDto))
                 .paid(event.getPaid())
                 .title(event.getTitle())
-                // views будет установлен отдельно в сервисе
+                // rating будет установлен отдельно в сервисе
                 .build();
     }
 
@@ -72,7 +72,7 @@ public class EventMapper {
                 .requestModeration(event.getRequestModeration())
                 .state(event.getState())
                 .title(event.getTitle())
-                // views устанавливается отдельно в сервисе
+                // rating устанавливается отдельно в сервисе
                 .build();
     }
 
