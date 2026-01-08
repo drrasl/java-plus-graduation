@@ -17,8 +17,8 @@ public class RecommendationsController extends RecommendationsControllerGrpc.Rec
     private final RecommendationsService recommendationsService;
 
     @Override
-    public void getRecommendationsForUser (UserPredictionsRequestProto request,
-                                           StreamObserver<RecommendedEventProto> responseObserver) {
+    public void getRecommendationsForUser(UserPredictionsRequestProto request,
+                                          StreamObserver<RecommendedEventProto> responseObserver) {
         try {
             recommendationsService.getRecommendationsForUser(request).forEach(responseObserver::onNext);
             responseObserver.onCompleted();
