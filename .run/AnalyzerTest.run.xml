@@ -1,0 +1,18 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="AnalyzerTest" type="Application" factoryName="Application">
+    <envs>
+      <env name="SPRING_PROFILES_ACTIVE" value="test" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="ru.practicum.stats.analyzer.Analyzer" />
+    <module name="analyzer" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="ru.practicum.stats.analyzer.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

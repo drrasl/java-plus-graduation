@@ -118,8 +118,14 @@ public class AggregationStarter {
         for (EventSimilarityAvro similarity : similarities) {
             try {
                 log.info("Начинаю отправку сообщений {} в топик {}", similarity, producerConfig.getTopic());
-                ProducerRecord<String, EventSimilarityAvro> record = new ProducerRecord<>(producerConfig.getTopic()
-                        , null, similarity.getTimestamp().toEpochMilli(), null, similarity);
+                String key = similarity.getEventA() + "_" + similarity.getEventB();
+                ProducerRecord<String, EventSimilarityAvro> record = new ProducerRecord<>(
+                        producerConfig.getTopic(),
+                        null,
+                        similarity.getTimestamp().toEpochMilli(),
+                        key,
+                        similarity);
+                log.info("Отправляю сходство {} -> ключ: {}", similarity, key);
                 producer.send(record, (metadata, exception) -> {
                     if (exception != null) {
                         log.error("Ошибка отправки сообщения в топик {}", producerConfig.getTopic(), exception);
@@ -128,7 +134,7 @@ public class AggregationStarter {
                                 producerConfig.getTopic(), metadata.partition(), metadata.offset());
                     }
                 });
-                producer.flush();
+                //producer.flush();
             } catch (Exception e) {
                 log.error("Ошибка обработки события", e);
             }
