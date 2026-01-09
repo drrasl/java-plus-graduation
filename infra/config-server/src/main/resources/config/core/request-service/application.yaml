@@ -69,3 +69,15 @@ resilience4j:
         sliding-window-type: COUNT_BASED
         minimum-number-of-calls: 7
         automatic-transition-from-open-to-half-open-enabled: true
+
+# GRPC клиент для collector
+grpc:
+  client:
+    collector:
+      address: 'discovery:///collector'
+      enableKeepAlive: true
+      keepAliveWithoutCalls: true
+      negotiationType: plaintext
+      enableRetry: true
+      retryAttempts: 15
+      retryDelay: 3000

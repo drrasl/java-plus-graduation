@@ -1,0 +1,11 @@
+@namespace("ru.practicum.stats.avro")
+protocol EventsSimilarityProtocol {
+    import idl "Event.avdl"; // кажется - это тут не нужно
+
+    record EventSimilarityAvro {
+        long eventA;
+        long eventB;
+        double score;
+        timestamp_ms timestamp;
+    }
+}

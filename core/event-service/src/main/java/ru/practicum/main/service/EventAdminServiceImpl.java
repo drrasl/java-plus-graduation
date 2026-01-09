@@ -26,7 +26,8 @@ import ru.practicum.main.repository.CategoryRepository;
 import ru.practicum.main.repository.EventRepository;
 import ru.practicum.main.repository.LocationRepository;
 import ru.practicum.main.service.interfaces.EventAdminService;
-import ru.practicum.stats.client.StatClient;
+import ru.practicum.stats.client.CollectorClient;
+import ru.practicum.stats.client.RecommendationsClient;
 import ru.practicum.main.model.QEvent;
 
 import java.time.LocalDateTime;
@@ -43,12 +44,13 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
     private final LocationRepository locationRepository;
 
     public EventAdminServiceImpl(RequestClient requestClient,
-                                 StatClient statClient,
+                                 CollectorClient collectorClient,
+                                 RecommendationsClient recommendationsClient,
                                  UserClient userClient,
                                  EventRepository eventRepository,
                                  CategoryRepository categoryRepository,
                                  LocationRepository locationRepository) {
-        super(requestClient, statClient, userClient);
+        super(requestClient, collectorClient, recommendationsClient, userClient);
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
         this.locationRepository = locationRepository;
@@ -65,7 +67,7 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
         }
         List<Event> events = eventsPage.getContent();
         Map<Long, UserDto> initiatorsMap = getInitiatorsMap(events);
-        Map<Long, Long> views = getEventsViews(events);
+        Map<Long, Double> ratings = getEventsRatings(events);
         Map<Long, Integer> confirmedRequests = getConfirmedRequests(events);
         return events.stream()
                 .map(event -> {
@@ -78,7 +80,7 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
                     }
 
                     EventFullDto dto = EventMapper.toEventFullDto(event, userDto);
-                    dto.setViews(views.getOrDefault(event.getId(), 0L));
+                    dto.setRating(ratings.get(event.getId()));
                     dto.setConfirmedRequests(confirmedRequests.getOrDefault(event.getId(), 0));
                     return dto;
                 })
@@ -104,12 +106,11 @@ public class EventAdminServiceImpl extends AbstractEventService implements Event
 
         UserDto userDto = getUserById(event.getInitiatorId());
 
-        Long views = getEventViews(eventId);
         Integer confirmedRequests = getConfirmedRequestsCount(eventId);
         updatedEvent.setConfirmedRequests(confirmedRequests);
 
         EventFullDto result = EventMapper.toEventFullDto(updatedEvent, userDto);
-        result.setViews(views);
+        result.setRating(getEventRating(eventId));
         result.setConfirmedRequests(confirmedRequests);
 
         log.info("Событие {} успешно обновлено администратором", eventId);
